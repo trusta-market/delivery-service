@@ -3,9 +3,11 @@ package com.trustamarket.deliveryservice.delivery.application.service;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionInboundDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionReturnDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateOrderDeliveryCommand;
+import com.trustamarket.deliveryservice.delivery.application.dto.command.HandleCarrierCompletedCommand;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionInboundDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionReturnDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateOrderDeliveryUseCase;
+import com.trustamarket.deliveryservice.delivery.application.port.in.HandleCarrierCompletedUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRepository;
 import com.trustamarket.deliveryservice.delivery.application.port.out.InspectionCenterClient;
 import com.trustamarket.deliveryservice.delivery.application.port.out.ProcessedEventRepository;
@@ -33,11 +35,12 @@ import java.time.Instant;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, CreateInspectionReturnDeliveryUseCase, CreateOrderDeliveryUseCase {
+public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, CreateInspectionReturnDeliveryUseCase, CreateOrderDeliveryUseCase, HandleCarrierCompletedUseCase {
 
     private final DeliveryRepository deliveryRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final InspectionCenterClient inspectionCenterClient;
+    private final DeliveryEventRouter deliveryEventRouter;
 
     private static final String HIGH_TYPE = "HIGH";
 
@@ -131,5 +134,25 @@ public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, 
         processedEventRepository.save(eventKey);
         log.info("ORDER_DELIVERY 배송 생성 완료: deliveryId={}, orderId={}, orderType={}",
                 delivery.getId().value(), command.orderId(), command.orderType());
+    }
+
+    @Override
+    public void handle(HandleCarrierCompletedCommand command) {
+        String eventKey = "carrier.completed:" + command.deliveryId();
+        if (processedEventRepository.existsByEventKey(eventKey)) {
+            log.warn("중복 이벤트 스킵: key={}", eventKey);
+            return;
+        }
+
+        Delivery delivery = deliveryRepository.findById(DeliveryId.of(command.deliveryId()))
+                .orElseThrow(() -> new DeliveryException(DeliveryErrorCode.DELIVERY_NOT_FOUND,
+                        "deliveryId=" + command.deliveryId()));
+
+        delivery.deliver(Instant.now());
+        deliveryRepository.save(delivery);
+        processedEventRepository.save(eventKey);
+
+        deliveryEventRouter.route(delivery);
+        log.info("배송 완료 처리: deliveryId={}, deliveryType={}", command.deliveryId(), delivery.getDeliveryType());
     }
 }
