@@ -24,7 +24,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "delivery")
+@Table(name = "p_deliveries")
 @EntityListeners(AuditingEntityListener.class)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter

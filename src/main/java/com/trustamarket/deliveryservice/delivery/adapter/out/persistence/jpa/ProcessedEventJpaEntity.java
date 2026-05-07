@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Entity
-@Table(name = "processed_event")
+@Table(name = "p_processed_events")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
 public class ProcessedEventJpaEntity {
