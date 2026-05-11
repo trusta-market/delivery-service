@@ -4,6 +4,7 @@ import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateI
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionReturnDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateOrderDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.HandleCarrierCompletedCommand;
+import com.trustamarket.deliveryservice.delivery.application.dto.result.GetDeliveryStatusResult;
 import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRepository;
 import com.trustamarket.deliveryservice.delivery.application.port.out.InspectionCenterClient;
 import com.trustamarket.deliveryservice.delivery.domain.exception.DeliveryException;
@@ -307,6 +308,48 @@ class DeliveryServiceTest {
 
             then(deliveryEventRouter).shouldHaveNoInteractions();
             then(processedEventRepository).should(never()).save(anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("배송 상태 조회 (get)")
+    class GetDeliveryStatus {
+
+        @Test
+        @DisplayName("존재하는 deliveryId면 GetDeliveryStatusResult를 반환한다")
+        void get_success() {
+            Delivery delivery = shippedDelivery(DELIVERY_ID, DeliveryType.INSPECTION_INBOUND, null);
+            given(deliveryRepository.findById(DeliveryId.of(DELIVERY_ID))).willReturn(Optional.of(delivery));
+
+            GetDeliveryStatusResult result = deliveryService.get(DELIVERY_ID);
+
+            assertThat(result.deliveryId()).isEqualTo(DELIVERY_ID);
+            assertThat(result.deliveryType()).isEqualTo(DeliveryType.INSPECTION_INBOUND);
+            assertThat(result.status()).isEqualTo(DeliveryStatus.SHIPPED);
+            assertThat(result.productId()).isEqualTo(PRODUCT_ID);
+            assertThat(result.trackingNumber()).isEqualTo("TRACK-001");
+            assertThat(result.orderId()).isNull();
+        }
+
+        @Test
+        @DisplayName("ORDER_DELIVERY면 orderId도 결과에 포함된다")
+        void get_orderDelivery_includesOrderId() {
+            Delivery delivery = shippedDelivery(DELIVERY_ID, DeliveryType.ORDER_DELIVERY, ORDER_ID);
+            given(deliveryRepository.findById(DeliveryId.of(DELIVERY_ID))).willReturn(Optional.of(delivery));
+
+            GetDeliveryStatusResult result = deliveryService.get(DELIVERY_ID);
+
+            assertThat(result.deliveryType()).isEqualTo(DeliveryType.ORDER_DELIVERY);
+            assertThat(result.orderId()).isEqualTo(ORDER_ID);
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 deliveryId면 DeliveryException을 던진다")
+        void get_notFound_throwsException() {
+            given(deliveryRepository.findById(DeliveryId.of(DELIVERY_ID))).willReturn(Optional.empty());
+
+            assertThatThrownBy(() -> deliveryService.get(DELIVERY_ID))
+                    .isInstanceOf(DeliveryException.class);
         }
     }
 
