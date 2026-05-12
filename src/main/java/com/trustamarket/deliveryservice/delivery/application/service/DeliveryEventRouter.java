@@ -11,10 +11,6 @@ public class DeliveryEventRouter {
 
     private final DeliveryEventPublisher publisher;
 
-    public void requestCarrier(Delivery delivery) {
-        publisher.publishCarrierDeliveryRequested(delivery);
-    }
-
     public void route(Delivery delivery) {
         switch (delivery.getDeliveryType()) {
             case INSPECTION_INBOUND ->
