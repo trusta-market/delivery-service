@@ -68,6 +68,7 @@ public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, 
 
         deliveryRepository.save(delivery);
         processedEventRepository.save(eventKey);
+        deliveryEventRouter.requestCarrier(delivery);
         log.info("INSPECTION_INBOUND 배송 생성 완료: deliveryId={}, productId={}",
                 delivery.getId().value(), command.productId());
     }
@@ -94,6 +95,7 @@ public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, 
 
         deliveryRepository.save(delivery);
         processedEventRepository.save(eventKey);
+        deliveryEventRouter.requestCarrier(delivery);
         log.info("INSPECTION_RETURN 배송 생성 완료: deliveryId={}, productId={}",
                 delivery.getId().value(), command.productId());
     }
@@ -134,6 +136,7 @@ public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, 
 
         deliveryRepository.save(delivery);
         processedEventRepository.save(eventKey);
+        deliveryEventRouter.requestCarrier(delivery);
         log.info("ORDER_DELIVERY 배송 생성 완료: deliveryId={}, orderId={}, orderType={}",
                 delivery.getId().value(), command.orderId(), command.orderType());
     }
