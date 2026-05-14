@@ -6,6 +6,11 @@ metadata:
     app: delivery-service
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: delivery-service
@@ -46,7 +51,7 @@ spec:
                   key: DB_PASSWORD
           resources:
             requests:
-              cpu: 700m
+              cpu: 500m
               memory: 2Gi
             limits:
               cpu: 1000m
