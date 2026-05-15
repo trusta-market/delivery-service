@@ -2,6 +2,17 @@ spring:
   application:
     name: delivery-service
 
+  profiles:
+    active: local
+
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+  cloud:
+    config:
+      label: develop
+      fail-fast: false
+
 management:
   endpoint:
     health:

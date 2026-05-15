@@ -1,7 +1,9 @@
 package com.trustamarket.deliveryservice.delivery.application.service;
 
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionInboundDeliveryCommand;
+import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionReturnDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionInboundDeliveryUseCase;
+import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionReturnDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRepository;
 import com.trustamarket.deliveryservice.delivery.application.port.out.ProcessedEventRepository;
 import com.trustamarket.deliveryservice.delivery.domain.enums.CarrierType;
@@ -23,7 +25,7 @@ import java.time.Instant;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class DeliveryService implements CreateInspectionInboundDeliveryUseCase {
+public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, CreateInspectionReturnDeliveryUseCase {
 
     private final DeliveryRepository deliveryRepository;
     private final ProcessedEventRepository processedEventRepository;
@@ -51,6 +53,32 @@ public class DeliveryService implements CreateInspectionInboundDeliveryUseCase {
         deliveryRepository.save(delivery);
         processedEventRepository.save(eventKey);
         log.info("INSPECTION_INBOUND 배송 생성 완료: deliveryId={}, productId={}",
+                delivery.getId().value(), command.productId());
+    }
+
+    @Override
+    public void create(CreateInspectionReturnDeliveryCommand command) {
+        String eventKey = "inspection.failed:" + command.productId();
+        if (processedEventRepository.existsByEventKey(eventKey)) {
+            log.warn("중복 이벤트 스킵: key={}", eventKey);
+            return;
+        }
+
+        Delivery delivery = Delivery.create(
+                DeliveryId.generate(),
+                DeliveryType.INSPECTION_RETURN,
+                CarrierType.MOCK,
+                null,
+                new ProductId(command.productId()),
+                new SenderId(command.centerId()),
+                new ReceiverId(command.sellerId()),
+                CenterId.of(command.centerId()),
+                Instant.now()
+        );
+
+        deliveryRepository.save(delivery);
+        processedEventRepository.save(eventKey);
+        log.info("INSPECTION_RETURN 배송 생성 완료: deliveryId={}, productId={}",
                 delivery.getId().value(), command.productId());
     }
 }
