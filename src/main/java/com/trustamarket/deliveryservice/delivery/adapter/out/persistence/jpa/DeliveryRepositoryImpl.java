@@ -1,11 +1,13 @@
 package com.trustamarket.deliveryservice.delivery.adapter.out.persistence.jpa;
 
 import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRepository;
+import com.trustamarket.deliveryservice.delivery.domain.enums.DeliveryStatus;
 import com.trustamarket.deliveryservice.delivery.domain.model.Delivery;
 import com.trustamarket.deliveryservice.delivery.domain.vo.DeliveryId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -29,5 +31,12 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
     @Override
     public Optional<Delivery> findById(DeliveryId id) {
         return jpaRepository.findById(id.value()).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<Delivery> findAllByStatus(DeliveryStatus status) {
+        return jpaRepository.findAllByStatus(status).stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 }
