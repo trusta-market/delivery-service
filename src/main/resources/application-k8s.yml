@@ -1,0 +1,50 @@
+# K8s 환경 전용 override (SPRING_PROFILES_ACTIVE=k8s 일 때만 로드).
+
+server:
+  port: 8202
+
+spring:
+  config:
+    import: "optional:configserver:http://config-server"
+  cloud:
+    config:
+      uri: http://config-server
+      label: develop
+      fail-fast: false
+  datasource:
+    url: jdbc:postgresql://postgres:5432/trusta_market
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        default_schema: p_delivery
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+  # Kafka — GKE namespace 'kafka' 의 StatefulSet 3 broker.
+  # 현재 DEV 브랜치 사용 없음.
+  # dependency 가 spring-kafka 라 auto-config 가 localhost:9092 로
+  # fallback 하는 거 막고, 향후 listener 도입 대비.
+  kafka:
+    bootstrap-servers: kafka.kafka:9092
+    listener:
+      ack-mode: manual
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
