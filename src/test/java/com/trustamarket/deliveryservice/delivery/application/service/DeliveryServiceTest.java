@@ -3,13 +3,22 @@ package com.trustamarket.deliveryservice.delivery.application.service;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionInboundDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionReturnDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateOrderDeliveryCommand;
+import com.trustamarket.deliveryservice.delivery.application.dto.command.HandleCarrierCompletedCommand;
 import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRepository;
 import com.trustamarket.deliveryservice.delivery.application.port.out.InspectionCenterClient;
 import com.trustamarket.deliveryservice.delivery.domain.exception.DeliveryException;
 import com.trustamarket.deliveryservice.delivery.application.port.out.ProcessedEventRepository;
+import com.trustamarket.deliveryservice.delivery.domain.enums.CarrierType;
 import com.trustamarket.deliveryservice.delivery.domain.enums.DeliveryStatus;
 import com.trustamarket.deliveryservice.delivery.domain.enums.DeliveryType;
 import com.trustamarket.deliveryservice.delivery.domain.model.Delivery;
+import com.trustamarket.deliveryservice.delivery.domain.vo.CenterId;
+import com.trustamarket.deliveryservice.delivery.domain.vo.DeliveryBatchId;
+import com.trustamarket.deliveryservice.delivery.domain.vo.DeliveryId;
+import com.trustamarket.deliveryservice.delivery.domain.vo.OrderId;
+import com.trustamarket.deliveryservice.delivery.domain.vo.ProductId;
+import com.trustamarket.deliveryservice.delivery.domain.vo.ReceiverId;
+import com.trustamarket.deliveryservice.delivery.domain.vo.SenderId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,6 +28,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,14 +52,18 @@ class DeliveryServiceTest {
     @Mock
     private InspectionCenterClient inspectionCenterClient;
 
+    @Mock
+    private DeliveryEventRouter deliveryEventRouter;
+
     @InjectMocks
     private DeliveryService deliveryService;
 
-    private static final UUID PRODUCT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID SELLER_ID  = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final UUID CENTER_ID  = UUID.fromString("00000000-0000-0000-0000-000000000003");
-    private static final UUID ORDER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000004");
-    private static final UUID BUYER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000005");
+    private static final UUID DELIVERY_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID PRODUCT_ID  = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID SELLER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID CENTER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000004");
+    private static final UUID ORDER_ID    = UUID.fromString("00000000-0000-0000-0000-000000000005");
+    private static final UUID BUYER_ID    = UUID.fromString("00000000-0000-0000-0000-000000000006");
 
     @Nested
     @DisplayName("검수 입고 배송 생성 (createInspectionInbound)")
@@ -220,5 +234,100 @@ class DeliveryServiceTest {
             then(deliveryRepository).should(never()).save(any());
             then(processedEventRepository).should(never()).save(anyString());
         }
+    }
+
+    @Nested
+    @DisplayName("배송 완료 처리 (handle)")
+    class Handle {
+
+        @Test
+        @DisplayName("INSPECTION_INBOUND 배송을 완료 처리하고 라우터를 호출한다")
+        void handle_inspectionInbound_success() {
+            Delivery shippedDelivery = shippedDelivery(DELIVERY_ID, DeliveryType.INSPECTION_INBOUND, null);
+            HandleCarrierCompletedCommand command = new HandleCarrierCompletedCommand(DELIVERY_ID);
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(false);
+            given(deliveryRepository.findById(DeliveryId.of(DELIVERY_ID))).willReturn(Optional.of(shippedDelivery));
+            given(deliveryRepository.save(any(Delivery.class))).willAnswer(i -> i.getArgument(0));
+
+            deliveryService.handle(command);
+
+            ArgumentCaptor<Delivery> captor = ArgumentCaptor.forClass(Delivery.class);
+            then(deliveryRepository).should().save(captor.capture());
+            assertThat(captor.getValue().getStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+            assertThat(captor.getValue().getDeliveredAt()).isNotNull();
+
+            then(deliveryEventRouter).should().route(captor.getValue());
+            then(processedEventRepository).should().save("carrier.completed:" + DELIVERY_ID);
+        }
+
+        @Test
+        @DisplayName("ORDER_DELIVERY 배송을 완료 처리하고 라우터를 호출한다")
+        void handle_orderDelivery_success() {
+            Delivery shippedDelivery = shippedDelivery(DELIVERY_ID, DeliveryType.ORDER_DELIVERY, ORDER_ID);
+            HandleCarrierCompletedCommand command = new HandleCarrierCompletedCommand(DELIVERY_ID);
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(false);
+            given(deliveryRepository.findById(DeliveryId.of(DELIVERY_ID))).willReturn(Optional.of(shippedDelivery));
+            given(deliveryRepository.save(any(Delivery.class))).willAnswer(i -> i.getArgument(0));
+
+            deliveryService.handle(command);
+
+            ArgumentCaptor<Delivery> captor = ArgumentCaptor.forClass(Delivery.class);
+            then(deliveryRepository).should().save(captor.capture());
+            assertThat(captor.getValue().getStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+
+            then(deliveryEventRouter).should().route(captor.getValue());
+        }
+
+        @Test
+        @DisplayName("이미 처리된 이벤트면 스킵하고 라우터를 호출하지 않는다")
+        void handle_duplicateEvent_skip() {
+            HandleCarrierCompletedCommand command = new HandleCarrierCompletedCommand(DELIVERY_ID);
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(true);
+
+            deliveryService.handle(command);
+
+            then(deliveryRepository).should(never()).findById(any());
+            then(deliveryRepository).should(never()).save(any());
+            then(deliveryEventRouter).shouldHaveNoInteractions();
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 deliveryId면 DeliveryException을 던진다")
+        void handle_deliveryNotFound_throwsException() {
+            HandleCarrierCompletedCommand command = new HandleCarrierCompletedCommand(DELIVERY_ID);
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(false);
+            given(deliveryRepository.findById(DeliveryId.of(DELIVERY_ID))).willReturn(Optional.empty());
+
+            assertThatThrownBy(() -> deliveryService.handle(command))
+                    .isInstanceOf(DeliveryException.class);
+
+            then(deliveryEventRouter).shouldHaveNoInteractions();
+            then(processedEventRepository).should(never()).save(anyString());
+        }
+    }
+
+    private Delivery shippedDelivery(UUID deliveryId, DeliveryType deliveryType, UUID orderId) {
+        return Delivery.restore(
+                DeliveryId.of(deliveryId),
+                deliveryType,
+                CarrierType.MOCK,
+                orderId != null ? new OrderId(orderId) : null,
+                new ProductId(PRODUCT_ID),
+                new SenderId(SELLER_ID),
+                new ReceiverId(BUYER_ID),
+                new CenterId(CENTER_ID),
+                Instant.now().minusSeconds(3600),
+                DeliveryStatus.SHIPPED,
+                new DeliveryBatchId(UUID.randomUUID()),
+                "TRACK-001",
+                Instant.now().minusSeconds(1800),
+                null,
+                null,
+                null
+        );
     }
 }
