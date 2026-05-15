@@ -4,9 +4,11 @@ import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateI
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionReturnDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateOrderDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.HandleCarrierCompletedCommand;
+import com.trustamarket.deliveryservice.delivery.application.dto.result.GetDeliveryStatusResult;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionInboundDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionReturnDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateOrderDeliveryUseCase;
+import com.trustamarket.deliveryservice.delivery.application.port.in.GetDeliveryStatusUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.HandleCarrierCompletedUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRepository;
 import com.trustamarket.deliveryservice.delivery.application.port.out.InspectionCenterClient;
@@ -35,7 +37,7 @@ import java.time.Instant;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, CreateInspectionReturnDeliveryUseCase, CreateOrderDeliveryUseCase, HandleCarrierCompletedUseCase {
+public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, CreateInspectionReturnDeliveryUseCase, CreateOrderDeliveryUseCase, HandleCarrierCompletedUseCase, GetDeliveryStatusUseCase {
 
     private final DeliveryRepository deliveryRepository;
     private final ProcessedEventRepository processedEventRepository;
@@ -134,6 +136,15 @@ public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, 
         processedEventRepository.save(eventKey);
         log.info("ORDER_DELIVERY 배송 생성 완료: deliveryId={}, orderId={}, orderType={}",
                 delivery.getId().value(), command.orderId(), command.orderType());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GetDeliveryStatusResult get(UUID deliveryId) {
+        Delivery delivery = deliveryRepository.findById(DeliveryId.of(deliveryId))
+                .orElseThrow(() -> new DeliveryException(DeliveryErrorCode.DELIVERY_NOT_FOUND,
+                        "deliveryId=" + deliveryId));
+        return GetDeliveryStatusResult.from(delivery);
     }
 
     @Override
