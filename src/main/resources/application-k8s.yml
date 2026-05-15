@@ -51,3 +51,10 @@ eureka:
     fetch-registry: true
   instance:
     prefer-ip-address: true
+
+# DeliveryBatchScheduler 의 @Scheduled placeholder. config-repo 에 -k8s.yml 없어서
+# k8s 프로필이 값 못 받음. prod 와 동일 cron 값 박음 (매일 9시, 14시).
+delivery:
+  batch:
+    am-cron: "0 0 9 * * *"
+    pm-cron: "0 0 14 * * *"
