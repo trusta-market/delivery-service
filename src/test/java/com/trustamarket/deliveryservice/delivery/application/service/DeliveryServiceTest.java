@@ -2,7 +2,10 @@ package com.trustamarket.deliveryservice.delivery.application.service;
 
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionInboundDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionReturnDeliveryCommand;
+import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateOrderDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRepository;
+import com.trustamarket.deliveryservice.delivery.application.port.out.InspectionCenterClient;
+import com.trustamarket.deliveryservice.delivery.domain.exception.DeliveryException;
 import com.trustamarket.deliveryservice.delivery.application.port.out.ProcessedEventRepository;
 import com.trustamarket.deliveryservice.delivery.domain.enums.DeliveryStatus;
 import com.trustamarket.deliveryservice.delivery.domain.enums.DeliveryType;
@@ -16,9 +19,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -34,12 +39,17 @@ class DeliveryServiceTest {
     @Mock
     private ProcessedEventRepository processedEventRepository;
 
+    @Mock
+    private InspectionCenterClient inspectionCenterClient;
+
     @InjectMocks
     private DeliveryService deliveryService;
 
     private static final UUID PRODUCT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID SELLER_ID  = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID CENTER_ID  = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID ORDER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000004");
+    private static final UUID BUYER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000005");
 
     @Nested
     @DisplayName("검수 입고 배송 생성 (createInspectionInbound)")
@@ -119,6 +129,89 @@ class DeliveryServiceTest {
         void create_inspectionReturn_duplicateEvent_skip() {
             CreateInspectionReturnDeliveryCommand command =
                     new CreateInspectionReturnDeliveryCommand(PRODUCT_ID, SELLER_ID, CENTER_ID);
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(true);
+
+            deliveryService.create(command);
+
+            then(deliveryRepository).should(never()).save(any());
+            then(processedEventRepository).should(never()).save(anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("주문 배송 생성 (createOrderDelivery)")
+    class CreateOrderDelivery {
+
+        @Test
+        @DisplayName("LOW 주문이면 senderId=sellerId, centerId=null로 ORDER_DELIVERY 배송을 생성한다")
+        void create_orderDelivery_low_success() {
+            CreateOrderDeliveryCommand command =
+                    new CreateOrderDeliveryCommand(ORDER_ID, PRODUCT_ID, SELLER_ID, BUYER_ID, "LOW");
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(false);
+            given(deliveryRepository.save(any(Delivery.class))).willAnswer(i -> i.getArgument(0));
+
+            deliveryService.create(command);
+
+            ArgumentCaptor<Delivery> captor = ArgumentCaptor.forClass(Delivery.class);
+            then(deliveryRepository).should().save(captor.capture());
+
+            Delivery saved = captor.getValue();
+            assertThat(saved.getDeliveryType()).isEqualTo(DeliveryType.ORDER_DELIVERY);
+            assertThat(saved.getStatus()).isEqualTo(DeliveryStatus.PENDING);
+            assertThat(saved.getOrderId().value()).isEqualTo(ORDER_ID);
+            assertThat(saved.getProductId().value()).isEqualTo(PRODUCT_ID);
+            assertThat(saved.getSenderId().value()).isEqualTo(SELLER_ID);
+            assertThat(saved.getReceiverId().value()).isEqualTo(BUYER_ID);
+            assertThat(saved.getCenterId()).isNull();
+
+            then(inspectionCenterClient).shouldHaveNoInteractions();
+            then(processedEventRepository).should().save("order.paid:" + ORDER_ID);
+        }
+
+        @Test
+        @DisplayName("HIGH 주문이면 Feign으로 centerId를 조회하고 senderId=centerId로 배송을 생성한다")
+        void create_orderDelivery_high_success() {
+            CreateOrderDeliveryCommand command =
+                    new CreateOrderDeliveryCommand(ORDER_ID, PRODUCT_ID, SELLER_ID, BUYER_ID, "HIGH");
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(false);
+            given(inspectionCenterClient.getCenterIdByProductId(PRODUCT_ID)).willReturn(Optional.of(CENTER_ID));
+            given(deliveryRepository.save(any(Delivery.class))).willAnswer(i -> i.getArgument(0));
+
+            deliveryService.create(command);
+
+            ArgumentCaptor<Delivery> captor = ArgumentCaptor.forClass(Delivery.class);
+            then(deliveryRepository).should().save(captor.capture());
+
+            Delivery saved = captor.getValue();
+            assertThat(saved.getDeliveryType()).isEqualTo(DeliveryType.ORDER_DELIVERY);
+            assertThat(saved.getSenderId().value()).isEqualTo(CENTER_ID);
+            assertThat(saved.getReceiverId().value()).isEqualTo(BUYER_ID);
+            assertThat(saved.getCenterId().value()).isEqualTo(CENTER_ID);
+        }
+
+        @Test
+        @DisplayName("HIGH 주문에서 centerId 조회 실패 시 DeliveryException을 던진다")
+        void create_orderDelivery_high_centerNotFound_throws() {
+            CreateOrderDeliveryCommand command =
+                    new CreateOrderDeliveryCommand(ORDER_ID, PRODUCT_ID, SELLER_ID, BUYER_ID, "HIGH");
+
+            given(processedEventRepository.existsByEventKey(anyString())).willReturn(false);
+            given(inspectionCenterClient.getCenterIdByProductId(PRODUCT_ID)).willReturn(Optional.empty());
+
+            assertThatThrownBy(() -> deliveryService.create(command))
+                    .isInstanceOf(DeliveryException.class);
+
+            then(deliveryRepository).should(never()).save(any());
+        }
+
+        @Test
+        @DisplayName("이미 처리된 이벤트면 배송 생성 없이 스킵한다")
+        void create_orderDelivery_duplicateEvent_skip() {
+            CreateOrderDeliveryCommand command =
+                    new CreateOrderDeliveryCommand(ORDER_ID, PRODUCT_ID, SELLER_ID, BUYER_ID, "LOW");
 
             given(processedEventRepository.existsByEventKey(anyString())).willReturn(true);
 

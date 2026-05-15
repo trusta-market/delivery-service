@@ -13,7 +13,8 @@ public enum DeliveryErrorCode implements ErrorCodeSpec {
     INVALID_ORDER_ID("DL-006", HttpStatus.BAD_REQUEST, "OrderId는 null일 수 없습니다", ""),
     INVALID_PRODUCT_ID("DL-007", HttpStatus.BAD_REQUEST, "ProductId는 null일 수 없습니다", ""),
     INVALID_SENDER_ID("DL-008", HttpStatus.BAD_REQUEST, "SenderId는 null일 수 없습니다", ""),
-    INVALID_RECEIVER_ID("DL-009", HttpStatus.BAD_REQUEST, "ReceiverId는 null일 수 없습니다", "");
+    INVALID_RECEIVER_ID("DL-009", HttpStatus.BAD_REQUEST, "ReceiverId는 null일 수 없습니다", ""),
+    CENTER_NOT_FOUND("DL-010", HttpStatus.NOT_FOUND, "검수센터 정보를 조회할 수 없습니다", "centerId");
 
     private final String code;
     private final HttpStatus status;
