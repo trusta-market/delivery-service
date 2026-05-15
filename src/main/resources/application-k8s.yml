@@ -4,6 +4,9 @@ server:
   port: 8202
 
 spring:
+  main:
+    # common 의 JpaConfig.jpaAuditingHandler 와 delivery 자체 JpaAuditingConfig 의 동일 빈 충돌 회피.
+    allow-bean-definition-overriding: true
   config:
     import: "optional:configserver:http://config-server"
   cloud:
