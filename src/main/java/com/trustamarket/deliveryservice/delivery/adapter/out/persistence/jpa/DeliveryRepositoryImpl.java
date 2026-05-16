@@ -4,6 +4,7 @@ import com.trustamarket.deliveryservice.delivery.application.port.out.DeliveryRe
 import com.trustamarket.deliveryservice.delivery.domain.enums.DeliveryStatus;
 import com.trustamarket.deliveryservice.delivery.domain.model.Delivery;
 import com.trustamarket.deliveryservice.delivery.domain.vo.DeliveryId;
+import com.trustamarket.deliveryservice.delivery.domain.vo.OrderId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -31,6 +32,11 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
     @Override
     public Optional<Delivery> findById(DeliveryId id) {
         return jpaRepository.findById(id.value()).map(mapper::toDomain);
+    }
+
+    @Override
+    public Optional<Delivery> findByOrderId(OrderId orderId) {
+        return jpaRepository.findByOrderId(orderId.value()).map(mapper::toDomain);
     }
 
     @Override

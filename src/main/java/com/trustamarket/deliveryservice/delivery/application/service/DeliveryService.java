@@ -1,10 +1,12 @@
 package com.trustamarket.deliveryservice.delivery.application.service;
 
+import com.trustamarket.deliveryservice.delivery.application.dto.command.CancelOrderDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionInboundDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateInspectionReturnDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.CreateOrderDeliveryCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.command.HandleCarrierCompletedCommand;
 import com.trustamarket.deliveryservice.delivery.application.dto.result.GetDeliveryStatusResult;
+import com.trustamarket.deliveryservice.delivery.application.port.in.CancelOrderDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionInboundDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateInspectionReturnDeliveryUseCase;
 import com.trustamarket.deliveryservice.delivery.application.port.in.CreateOrderDeliveryUseCase;
@@ -37,7 +39,7 @@ import java.time.Instant;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, CreateInspectionReturnDeliveryUseCase, CreateOrderDeliveryUseCase, HandleCarrierCompletedUseCase, GetDeliveryStatusUseCase {
+public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, CreateInspectionReturnDeliveryUseCase, CreateOrderDeliveryUseCase, HandleCarrierCompletedUseCase, GetDeliveryStatusUseCase, CancelOrderDeliveryUseCase {
 
     private final DeliveryRepository deliveryRepository;
     private final ProcessedEventRepository processedEventRepository;
@@ -145,6 +147,25 @@ public class DeliveryService implements CreateInspectionInboundDeliveryUseCase, 
                 .orElseThrow(() -> new DeliveryException(DeliveryErrorCode.DELIVERY_NOT_FOUND,
                         "deliveryId=" + deliveryId));
         return GetDeliveryStatusResult.from(delivery);
+    }
+
+    @Override
+    public void cancel(CancelOrderDeliveryCommand command) {
+        String eventKey = "order.cancellation.requested:" + command.orderId();
+        if (processedEventRepository.existsByEventKey(eventKey)) {
+            log.warn("중복 이벤트 스킵: key={}", eventKey);
+            return;
+        }
+
+        deliveryRepository.findByOrderId(new OrderId(command.orderId()))
+                .ifPresentOrElse(delivery -> {
+                    delivery.cancel(Instant.now());
+                    deliveryRepository.save(delivery);
+                    log.info("ORDER_DELIVERY 취소 완료: deliveryId={}, orderId={}",
+                            delivery.getId().value(), command.orderId());
+                }, () -> log.info("ORDER_DELIVERY 없음 — 배송 취소 스킵: orderId={}", command.orderId()));
+
+        processedEventRepository.save(eventKey);
     }
 
     @Override
