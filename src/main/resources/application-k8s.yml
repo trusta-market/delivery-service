@@ -56,8 +56,13 @@ eureka:
 # k8s 프로필이 값 못 받음. prod 와 동일 cron 값 박음 (매일 9시, 14시).
 delivery:
   batch:
-    am-cron: "0 0 9 * * *"
-    pm-cron: "0 0 14 * * *"
+    # 원래값 (부하 테스트 끝나면 복귀):
+    # am-cron: "0 0 9 * * *"
+    # pm-cron: "0 0 14 * * *"
+    # 부하 테스트 동안 batch 흐름 검증 위해 임시로 매 10초 fire (am-cron 만).
+    # pm 은 "-" 로 비활성 (Spring 6 의 disabled cron) — am 만 fire 해서 중복 batch 회피.
+    am-cron: "*/10 * * * * *"
+    pm-cron: "-"
   # OutboxPoller @Scheduled placeholder. config-repo prod 와 동일 (10초 주기).
   outbox:
     scheduler-cron: "*/10 * * * * *"
