@@ -32,11 +32,6 @@ spring:
         default_schema: p_delivery
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
-  liquibase:
-    enabled: true
-    change-log: classpath:db/changelog/db.changelog-master.yml
-    default-schema: p_delivery
-    liquibase-schema: p_delivery
   # Kafka — GKE namespace 'kafka' 의 StatefulSet 3 broker.
   # 현재 DEV 브랜치 사용 없음.
   # dependency 가 spring-kafka 라 auto-config 가 localhost:9092 로
