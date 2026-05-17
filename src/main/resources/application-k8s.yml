@@ -18,6 +18,12 @@ spring:
     url: jdbc:postgresql://postgres:5432/trusta_market
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  # delivery / inspection 이 같은 V001__init.sql changeset (id 1-4, author seungwon) 을 쓰는데
+  # 그 두 service 가 public.databasechangelog 공유하면 file 내용 다를 때 checksum mismatch.
+  # → p_delivery schema 의 databasechangelog 으로 분리. p_delivery.databasechangelog row 는 별도 SQL 로 NULL md5 박아둠 (Liquibase 가 부팅 시 재계산).
+  liquibase:
+    default-schema: p_delivery
+    liquibase-schema: p_delivery
   jpa:
     hibernate:
       ddl-auto: update
@@ -59,9 +65,9 @@ delivery:
     # 원래값 (부하 테스트 끝나면 복귀):
     # am-cron: "0 0 9 * * *"
     # pm-cron: "0 0 14 * * *"
-    # 부하 테스트 동안 batch 흐름 검증 위해 임시로 매 10초 fire (am-cron 만).
-    # pm 은 "-" 로 비활성 (Spring 6 의 disabled cron) — am 만 fire 해서 중복 batch 회피.
-    am-cron: "*/10 * * * * *"
+    # 부하 테스트 동안 batch 흐름 검증 위해 am-cron 만 매 5초 fire.
+    # pm 은 "-" 로 비활성 (Spring 6 의 disabled cron) — 중복 batch 회피.
+    am-cron: "*/5 * * * * *"
     pm-cron: "-"
   # OutboxPoller @Scheduled placeholder. config-repo prod 와 동일 (10초 주기).
   outbox:
