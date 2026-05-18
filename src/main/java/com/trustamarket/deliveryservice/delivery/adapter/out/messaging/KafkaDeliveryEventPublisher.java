@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Slf4j
@@ -39,8 +40,9 @@ public class KafkaDeliveryEventPublisher implements DeliveryEventPublisher {
 
     @Override
     public void publishDeliveryCompleted(UUID orderId, UUID deliveryId) {
+        // order-service 의 DeliveryCompletedListener 가 eventId (멱등성 키) 필수 — publisher 가 UUID 생성.
         saveToOutbox(DELIVERY_COMPLETED_TOPIC, orderId.toString(),
-                new DeliveryCompletedKafkaEvent(orderId, deliveryId));
+                new DeliveryCompletedKafkaEvent(UUID.randomUUID(), orderId, deliveryId, Instant.now()));
     }
 
     @Override
@@ -57,8 +59,9 @@ public class KafkaDeliveryEventPublisher implements DeliveryEventPublisher {
 
     @Override
     public void publishDeliveryStarted(UUID orderId, UUID deliveryId) {
+        // order-service 의 DeliveryStartedListener 가 eventId (멱등성 키) 필수 — publisher 가 UUID 생성.
         saveToOutbox(DELIVERY_STARTED_TOPIC, orderId.toString(),
-                new DeliveryStartedKafkaEvent(orderId, deliveryId));
+                new DeliveryStartedKafkaEvent(UUID.randomUUID(), orderId, deliveryId, Instant.now()));
     }
 
     private void saveToOutbox(String topic, String key, Object payload) {
