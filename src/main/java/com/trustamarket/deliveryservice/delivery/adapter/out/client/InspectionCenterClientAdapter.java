@@ -17,7 +17,7 @@ public class InspectionCenterClientAdapter implements InspectionCenterClient {
     @Override
     public Optional<UUID> getCenterIdByProductId(UUID productId) {
         try {
-            return Optional.ofNullable(feignClient.getCenterIdByProductId(productId).centerId());
+            return Optional.ofNullable(feignClient.getCenterIdByProductId(productId).data().centerId());
         } catch (FeignException.NotFound e) {
             return Optional.empty();
         }
