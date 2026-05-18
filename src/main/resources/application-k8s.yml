@@ -2,40 +2,29 @@
 
 server:
   port: 8202
-  # Tomcat — 부하 테스트 결과로 default threads.max=200 이 단일 pod 의 동시 처리 한계.
-  # 800 으로 증액 (stack ~800MB, memory limit 2Gi 안). accept-count 도 같이 늘려서 queue 더 받음.
-  tomcat:
-    threads:
-      max: 800
-    accept-count: 300
-    max-connections: 20000
 
 spring:
   main:
-    # common 의 JpaConfig.jpaAuditingHandler 와 delivery 자체 JpaAuditingConfig 의 동일 빈 충돌 회피.
     allow-bean-definition-overriding: true
+
   config:
     import: "optional:configserver:http://config-server"
+
   cloud:
     config:
       uri: http://config-server
       label: develop
       fail-fast: false
+
   datasource:
-    # DB_HOST env 로 endpoint 주입 (Secret domain-postgres-secrets). default = postgres (in-cluster fallback).
     url: jdbc:postgresql://${DB_HOST:postgres}:5432/trusta_market
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-    # HikariCP pool — 8차 결과로 pool 60 은 GC pause + tail latency 폭증 (DB 한가, connection state heap 점유).
-    # 6차 sweet spot (pool 18) 으로 복귀.
-    hikari:
-      maximum-pool-size: 18
-  # delivery / inspection 이 같은 V001__init.sql changeset (id 1-4, author seungwon) 을 쓰는데
-  # 그 두 service 가 public.databasechangelog 공유하면 file 내용 다를 때 checksum mismatch.
-  # → p_delivery schema 의 databasechangelog 으로 분리. p_delivery.databasechangelog row 는 별도 SQL 로 NULL md5 박아둠 (Liquibase 가 부팅 시 재계산).
+
   liquibase:
     default-schema: p_delivery
     liquibase-schema: p_delivery
+
   jpa:
     hibernate:
       ddl-auto: validate
@@ -44,10 +33,7 @@ spring:
         default_schema: p_delivery
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
-  # Kafka — GKE namespace 'kafka' 의 StatefulSet 3 broker.
-  # 현재 DEV 브랜치 사용 없음.
-  # dependency 가 spring-kafka 라 auto-config 가 localhost:9092 로
-  # fallback 하는 거 막고, 향후 listener 도입 대비.
+
   kafka:
     bootstrap-servers: kafka.kafka:9092
     listener:
@@ -67,26 +53,17 @@ eureka:
       defaultZone: http://eureka-server/eureka/
     register-with-eureka: true
     fetch-registry: true
+
   instance:
     prefer-ip-address: true
 
-# DeliveryBatchScheduler 의 @Scheduled placeholder. config-repo 에 -k8s.yml 없어서
-# k8s 프로필이 값 못 받음. prod 와 동일 cron 값 박음 (매일 9시, 14시).
 delivery:
   batch:
-    # 원래값 (부하 테스트 끝나면 복귀):
-    # am-cron: "0 0 9 * * *"
-    # pm-cron: "0 0 14 * * *"
-    # 부하 테스트 동안 batch 흐름 검증 위해 am-cron 만 매 5초 fire.
-    # pm 은 "-" 로 비활성 (Spring 6 의 disabled cron) — 중복 batch 회피.
     am-cron: "*/5 * * * * *"
     pm-cron: "-"
-  # OutboxPoller @Scheduled placeholder. config-repo prod 와 동일 (10초 주기).
   outbox:
     scheduler-cron: "*/10 * * * * *"
 
-# common 의 LoginFilter 가 gateway 의 X-User-* 헤더 → SecurityContext 로 주입.
-# false (default) 면 LoginFilter skip → 인증 path 401.
 trusta:
   security:
     trust-gateway-headers: true
