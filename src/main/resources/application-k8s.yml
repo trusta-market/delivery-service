@@ -62,7 +62,7 @@ delivery:
     am-cron: "*/5 * * * * *"
     pm-cron: "-"
   outbox:
-    scheduler-cron: "*/10 * * * * *"
+    scheduler-cron: "*/5 * * * * *"
 
 trusta:
   security:
