@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface DeliveryOutboxJpaRepository extends JpaRepository<DeliveryOutboxJpaEntity, UUID> {
 
-    List<DeliveryOutboxJpaEntity> findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus status);
+    List<DeliveryOutboxJpaEntity> findTop500ByStatusOrderByCreatedAtAsc(OutboxStatus status);
 }

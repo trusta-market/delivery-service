@@ -27,7 +27,7 @@ public class OutboxPoller {
     @Scheduled(cron = "${delivery.outbox.scheduler-cron}")
     public void poll() {
         List<DeliveryOutboxJpaEntity> pending =
-                outboxJpaRepository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
+                outboxJpaRepository.findTop500ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
         if (pending.isEmpty()) {
             return;
         }
