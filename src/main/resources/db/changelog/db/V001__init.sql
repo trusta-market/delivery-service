@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS p_deliveries (
 
 --changeset seungwon:2
 CREATE TABLE IF NOT EXISTS p_delivery_outbox (
-    id          UUID         PRIMARY KEY,
+    outbox_id          UUID         PRIMARY KEY,
     topic       VARCHAR(255) NOT NULL,
     message_key VARCHAR(255) NOT NULL,
     payload     TEXT         NOT NULL,
