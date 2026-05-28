@@ -3,6 +3,9 @@ package com.trustamarket.deliveryservice.delivery.adapter.out.messaging;
 import com.trustamarket.deliveryservice.delivery.adapter.out.persistence.jpa.DeliveryOutboxJpaEntity;
 import com.trustamarket.deliveryservice.delivery.adapter.out.persistence.jpa.DeliveryOutboxJpaRepository;
 import com.trustamarket.deliveryservice.delivery.adapter.out.persistence.jpa.OutboxStatus;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,22 +23,30 @@ public class OutboxPoller {
 
     private final DeliveryOutboxJpaRepository outboxJpaRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final OutboxClaimAdapter outboxClaimAdapter;
+    private final MeterRegistry meterRegistry;
 
     @Value("${delivery.outbox.max-retries:3}")
     private int maxRetries;
 
+    @Value("${delivery.outbox.batch-size:500}")
+    private int batchSize;
+
+    @PostConstruct
+    void registerMetrics() {
+        Gauge.builder("delivery.outbox.pending.depth",
+                () -> (double) outboxJpaRepository.countByStatus(OutboxStatus.PENDING))
+            .register(meterRegistry);
+    }
+
     @Scheduled(cron = "${delivery.outbox.scheduler-cron}")
     public void poll() {
-        List<DeliveryOutboxJpaEntity> pending =
-                outboxJpaRepository.findTop500ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
-        if (pending.isEmpty()) {
+        List<DeliveryOutboxJpaEntity> claimed = outboxClaimAdapter.claim(batchSize);
+        if (claimed.isEmpty()) {
             return;
         }
 
-        pending.forEach(DeliveryOutboxJpaEntity::markInProgress);
-        outboxJpaRepository.saveAll(pending);
-
-        for (DeliveryOutboxJpaEntity entry : pending) {
+        for (DeliveryOutboxJpaEntity entry : claimed) {
             try {
                 kafkaTemplate.send(entry.getTopic(), entry.getMessageKey(), entry.getPayload())
                         .get(5, TimeUnit.SECONDS);
