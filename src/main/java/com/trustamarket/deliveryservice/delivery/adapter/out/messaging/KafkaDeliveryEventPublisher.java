@@ -28,14 +28,15 @@ public class KafkaDeliveryEventPublisher implements DeliveryEventPublisher {
 
     @Override
     public void publishCarrierDeliveryCompleted(UUID productId) {
+        // inspection-service Inbox 멱등성 키 — Outbox row가 한 번 생성되므로 재발행돼도 동일 eventId 유지.
         saveToOutbox(CARRIER_DELIVERY_COMPLETED_TOPIC, productId.toString(),
-                new CarrierDeliveryCompletedKafkaEvent(productId));
+                new CarrierDeliveryCompletedKafkaEvent(UUID.randomUUID(), productId));
     }
 
     @Override
     public void publishCarrierReturnCompleted(UUID productId) {
         saveToOutbox(CARRIER_RETURN_COMPLETED_TOPIC, productId.toString(),
-                new CarrierReturnCompletedKafkaEvent(productId));
+                new CarrierReturnCompletedKafkaEvent(UUID.randomUUID(), productId));
     }
 
     @Override
